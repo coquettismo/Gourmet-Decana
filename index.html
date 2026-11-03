@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Cocina - Gastos e Ingresos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#fdf8f6',
+                            100: '#f2e8e5',
+                            500: '#e07a5f',
+                            600: '#d1603f',
+                            700: '#b04b2e',
+                            800: '#3d405b',
+                            900: '#2b2d42'
+                        },
+                        decana: {
+                            light: '#e8f5e9',
+                            DEFAULT: '#2e7d32',
+                            dark: '#1b5e20'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .tab-active { border-bottom: 3px solid #e07a5f; color: #e07a5f; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-brand-800 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brand-500 p-2.5 rounded-xl shadow-inner">
+                    <i class="fa-solid fa-utensils text-2xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">Registro de Cocina</h1>
+                    <p class="text-xs text-slate-300">Control de Gastos, Ingresos y Reparto Decana</p>
+                </div>
+            </div>
+
+            <!-- Porcentajes Config Quick Access -->
+            <div class="flex items-center bg-brand-900/60 px-3 py-1.5 rounded-lg border border-slate-700 text-xs gap-3">
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-store text-emerald-400"></i>
+                    <span>Decana: <strong id="headerDecanaPct" class="text-emerald-400">50%</strong></span>
+                </div>
+                <div class="h-4 w-[1px] bg-slate-600"></div>
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-wallet text-amber-400"></i>
+                    <span>Mi Ganancia: <strong id="headerProfitPct" class="text-amber-400">50%</strong></span>
+                </div>
+                <button onclick="openConfigModal()" class="ml-1 text-slate-300 hover:text-white transition">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- AI Voice & Smart Text Assistant Card -->
+        <div class="bg-gradient-to-r from-purple-900 via-slate-800 to-indigo-900 text-white p-5 rounded-2xl shadow-lg border border-purple-500/30 mb-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-purple-500/20 rounded-xl border border-purple-400/30 text-purple-300">
+                        <i class="fa-solid fa-wand-magic-sparkles text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-bold flex items-center gap-2">
+                            Ingreso Inteligente por Voz o Texto
+                            <span class="bg-purple-500/30 text-purple-200 text-[10px] px-2 py-0.5 rounded-full uppercase font-mono tracking-wider border border-purple-400/40">IA Gemini</span>
+                        </h2>
+                        <p class="text-xs text-purple-200/80">Dicta o escribe tus gastos/ventas en lenguaje natural (ej: "Hoy vendí 6 budines por 30000 pesos")</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 flex flex-col sm:flex-row items-center gap-2">
+                <div class="relative w-full flex-grow">
+                    <input type="text" id="aiInputText" placeholder="Ej: Compré verduras y harina por 12500 pesos ayer..." class="w-full bg-slate-900/80 text-white text-sm placeholder-slate-400 border border-purple-400/30 rounded-xl pl-4 pr-10 py-3 outline-none focus:ring-2 focus:ring-purple-400 transition">
+                    <button id="micBtn" onclick="toggleVoiceRecording()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-purple-300 transition" title="Dictar por Voz">
+                        <i id="micIcon" class="fa-solid fa-microphone text-base"></i>
+                    </button>
+                </div>
+                <button onclick="processAIInput()" id="aiProcessBtn" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white px-5 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition shadow-md whitespace-nowrap">
+                    <i class="fa-solid fa-bolt"></i> Procesar
+                </button>
+            </div>
+            <div id="aiStatus" class="mt-2 text-xs text-purple-300 hidden flex items-center gap-2">
+                <i class="fa-solid fa-spinner fa-spin"></i> Analizando mensaje con IA...
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-200 mb-6 space-x-6 text-slate-600 overflow-x-auto">
+            <button onclick="switchTab('movements')" id="tab-movements" class="tab-active py-2 px-1 text-sm sm:text-base flex items-center gap-2">
+                <i class="fa-solid fa-list-check"></i> Movimientos
+            </button>
+            <button onclick="switchTab('summary')" id="tab-summary" class="py-2 px-1 text-sm sm:text-base flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie"></i> Resumen Mensual & Decana
+            </button>
+            <button onclick="switchTab('analytics')" id="tab-analytics" class="py-2 px-1 text-sm sm:text-base flex items-center gap-2">
+                <i class="fa-solid fa-chart-line"></i> Estadísticas
+            </button>
+        </div>
+
+        <!-- TAB 1: MOVIMIENTOS (GASTOS E INGRESOS) -->
+        <section id="sec-movements" class="space-y-6">
+            
+            <!-- Quick Entry Card -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-plus text-brand-500"></i> Nuevo Registro
+                </h2>
+                <form id="movementForm" onsubmit="handleFormSubmit(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                    
+                    <!-- Tipo -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo</label>
+                        <select id="type" onchange="updateCategories()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                            <option value="ingreso">🟢 Ingreso (Venta)</option>
+                            <option value="gasto">🔴 Gasto (Ingrediente/Insumo)</option>
+                        </select>
+                    </div>
+
+                    <!-- Fecha -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+                        <input type="date" id="date" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+
+                    <!-- Categoría -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Categoría</label>
+                        <select id="category" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                            <!-- Se llena dinámicamente con JS -->
+                        </select>
+                    </div>
+
+                    <!-- Concepto / Descripción -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Concepto / Detalle</label>
+                        <input type="text" id="description" placeholder="Ej. Budines de Naranja (6 porciones)" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+
+                    <!-- Monto -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Monto ($)</label>
+                        <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+
+                    <!-- Botón Guardar -->
+                    <div class="flex items-end">
+                        <button type="submit" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-medium py-2.5 px-4 rounded-lg shadow transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Filters & Actions -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filtrar:</span>
+                    <select id="filterMonth" onchange="renderMovements()" class="bg-slate-100 border border-slate-300 rounded-lg text-xs p-2 outline-none">
+                        <!-- Opciones de meses -->
+                    </select>
+                    <select id="filterType" onchange="renderMovements()" class="bg-slate-100 border border-slate-300 rounded-lg text-xs p-2 outline-none">
+                        <option value="todos">Todos los tipos</option>
+                        <option value="ingreso">Solo Ingresos</option>
+                        <option value="gasto">Solo Gastos</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button onclick="exportToCSV()" class="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-2 rounded-lg text-slate-700 flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i> Exportar CSV
+                    </button>
+                    <button onclick="loadDemoData()" class="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-2 rounded-lg text-slate-600 flex items-center gap-1.5 transition" title="Cargar datos de prueba">
+                        <i class="fa-solid fa-vial"></i> Ejemplo
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de Movimientos -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 border-b border-slate-200 text-xs font-semibold uppercase text-slate-600">
+                            <tr>
+                                <th class="py-3 px-4">Fecha</th>
+                                <th class="py-3 px-4">Tipo</th>
+                                <th class="py-3 px-4">Categoría</th>
+                                <th class="py-3 px-4">Detalle / Concepto</th>
+                                <th class="py-3 px-4 text-right">Monto ($)</th>
+                                <th class="py-3 px-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="movementsTableBody" class="divide-y divide-slate-100">
+                            <!-- Filas generadas por JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Mensaje sin datos -->
+                <div id="noDataMessage" class="hidden text-center py-10 text-slate-400">
+                    <i class="fa-solid fa-receipt text-4xl mb-2"></i>
+                    <p>No se encontraron registros para la selección.</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- TAB 2: RESUMEN MENSUAL Y REPARTO DECANA -->
+        <section id="sec-summary" class="hidden space-y-6">
+            
+            <!-- Selector de Mes para Resumen -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <i class="fa-regular fa-calendar-days text-brand-500 text-xl"></i>
+                    <h2 class="text-base font-bold text-slate-800">Cierre Financiero Mensual</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-medium text-slate-600">Seleccionar Mes:</label>
+                    <select id="summaryMonthSelect" onchange="renderSummary()" class="bg-slate-100 border border-slate-300 rounded-lg text-sm p-2 font-medium outline-none">
+                        <!-- Opciones cargadas por JS -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tarjetas de Métricas -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                <!-- Ingresos Totales -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-emerald-500"></div>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ingresos Totales (Ventas)</p>
+                    <p id="sumIngresos" class="text-2xl font-black text-emerald-600">$0,00</p>
+                    <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-arrow-up text-emerald-500"></i> Bruto cobrado</p>
+                </div>
+
+                <!-- Gastos Totales -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-rose-500"></div>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Gastos de Producción</p>
+                    <p id="sumGastos" class="text-2xl font-black text-rose-600">$0,00</p>
+                    <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-arrow-down text-rose-500"></i> Ingredientes e Insumos</p>
+                </div>
+
+                <!-- Resultado / Lucro Neto -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-blue-500"></div>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ganancia Neta a Repartir</p>
+                    <p id="sumNeto" class="text-2xl font-black text-blue-600">$0,00</p>
+                    <p class="text-xs text-slate-500 mt-2">Ingresos menos Gastos</p>
+                </div>
+
+                <!-- Rentabilidad% -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-indigo-500"></div>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Margen de Ganancia</p>
+                    <p id="sumMargen" class="text-2xl font-black text-indigo-600">0%</p>
+                    <p class="text-xs text-slate-500 mt-2">Sobre ventas totales</p>
+                </div>
+            </div>
+
+            <!-- Desglose de Distribución (Decana vs Cocina/Ganancia) -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Distribución de Ganancia Neto</h3>
+                        <p class="text-xs text-slate-500">Cálculo de importes según el esquema de porcentaje acordado</p>
+                    </div>
+                    <span class="text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded-full font-medium border border-brand-100">
+                        Base de Reparto: Lucro Neto (Ingresos - Gastos)
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Tarjeta DECANA -->
+                    <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-building text-emerald-600"></i> Fondo Decana (Espacio)
+                                </span>
+                                <span id="cardDecanaPct" class="bg-emerald-200 text-emerald-800 text-xs font-black px-2.5 py-1 rounded-md">50%</span>
+                            </div>
+                            <p class="text-xs text-emerald-700 mb-4">Aporte para el espacio donde se cocina y equipamiento.</p>
+                            <p id="amountDecana" class="text-3xl font-black text-emerald-700">$0,00</p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-emerald-200/60 text-xs text-emerald-600 flex justify-between">
+                            <span>Monto a transferir / rendir:</span>
+                            <strong id="amountDecanaFinal">$0,00</strong>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta GANANCIA PERSONAL -->
+                    <div class="bg-amber-50/60 border border-amber-200 rounded-xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-sm font-bold text-amber-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-user-check text-amber-600"></i> Tu Ganancia Limpia
+                                </span>
+                                <span id="cardProfitPct" class="bg-amber-200 text-amber-800 text-xs font-black px-2.5 py-1 rounded-md">50%</span>
+                            </div>
+                            <p class="text-xs text-amber-700 mb-4">Monto neto resultante disponible para tu bolsillo.</p>
+                            <p id="amountProfit" class="text-3xl font-black text-amber-700">$0,00</p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-amber-200/60 text-xs text-amber-600 flex justify-between">
+                            <span>Retribución por trabajo:</span>
+                            <strong id="amountProfitFinal">$0,00</strong>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Desglose por Categorías -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Ventas por Categoría -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-tags text-emerald-500"></i> Ventas por Categoria
+                    </h4>
+                    <div id="incomeCategoryList" class="space-y-2 text-sm">
+                        <!-- Carga dinámica -->
+                    </div>
+                </div>
+
+                <!-- Gastos por Categoría -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h4 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-basket-shopping text-rose-500"></i> Gastos por Categoría
+                    </h4>
+                    <div id="expenseCategoryList" class="space-y-2 text-sm">
+                        <!-- Carga dinámica -->
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- TAB 3: ESTADÍSTICAS Y GRÁFICOS -->
+        <section id="sec-analytics" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gráfico Histórico -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-700 mb-4">Evolución de Ingresos y Gastos</h3>
+                    <div class="relative h-64">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Torta Distribuciòn -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-700 mb-4">Proporción del Último Mes</h3>
+                    <div class="relative h-64 flex justify-center">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-100 border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500">
+            Gestión de Ventas de Cocina & Decana &bull; Datos guardados localmente
+        </div>
+    </footer>
+
+    <!-- MODAL CONFIGURACIÓN PORCENTAJES -->
+    <div id="configModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Configurar Porcentajes de Reparto</h3>
+            <p class="text-xs text-slate-500 mb-4">Ajusta cómo se divide la ganancia neta (después de deducir gastos) entre Decana y tú.</p>
+
+            <div class="space-y-4">
+                <div>
+                    <div class="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                        <span>% Decana (Espacio Cocina):</span>
+                        <span id="modalDecanaVal">50%</span>
+                    </div>
+                    <input type="range" id="decanaRange" min="0" max="100" step="5" value="50" oninput="updateRangeLabels(this.value)" class="w-full accent-brand-500 cursor-pointer">
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                        <span>% Mi Ganancia:</span>
+                        <span id="modalProfitVal">50%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="closeConfigModal()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-200">Cancelar</button>
+                <button onclick="saveConfig()" class="px-4 py-2 bg-brand-500 text-white rounded-lg text-xs font-medium hover:bg-brand-600">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS LOGIC -->
+    <script>
+        // Categorías por tipo
+        const CATEGORIES = {
+            ingreso: ['Platos / Comidas', 'Budines / Dulces', 'Encargos Especiales', 'Cantina / Eventos', 'Otros Ingresos'],
+            gasto: ['Materia Prima / Alimentos', 'Empaques / Envases', 'Insumos Limpieza', 'Gas / Servicios', 'Otros Gastos']
+        };
+
+        // Estado Global
+        let movements = JSON.parse(localStorage.getItem('cocina_movements')) || [];
+        let config = JSON.parse(localStorage.getItem('cocina_config')) || { decanaPct: 50, profitPct: 50 };
+        let recognition = null;
+        let isRecording = false;
+
+        // Instancias de gráficos Chart.js
+        let historyChartInstance = null;
+        let pieChartInstance = null;
+
+        // Inicialización
+        window.onload = function() {
+            // Establecer fecha por defecto (Hoy)
+            document.getElementById('date').value = new Date().toISOString().split('T')[0];
+            
+            setupSpeechRecognition();
+            updateCategories();
+            updateHeaderConfigUI();
+            populateMonthFilters();
+            renderMovements();
+            renderSummary();
+        };
+
+        // Configurar Reconocimiento de Voz Web Speech API
+        function setupSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'es-AR';
+                recognition.continuous = false;
+                recognition.interimResults = false;
+
+                recognition.onstart = function() {
+                    isRecording = true;
+                    document.getElementById('micIcon').className = 'fa-solid fa-microphone-slash text-rose-400 animate-pulse';
+                    document.getElementById('aiInputText').placeholder = 'Escuchando tu dictado... habla ahora...';
+                };
+
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('aiInputText').value = transcript;
+                    stopRecording();
+                    processAIInput(); // Procesar automáticamente al terminar de hablar
+                };
+
+                recognition.onerror = function(event) {
+                    stopRecording();
+                    alert('No se pudo procesar el audio o el micrófono no tiene permiso.');
+                };
+
+                recognition.onend = function() {
+                    stopRecording();
+                };
+            }
+        }
+
+        function toggleVoiceRecording() {
+            if (!recognition) {
+                alert('Tu navegador o dispositivo no soporta dictado por voz directo. Puedes escribir el texto en el campo.');
+                return;
+            }
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('micIcon').className = 'fa-solid fa-microphone text-base';
+            document.getElementById('aiInputText').placeholder = 'Ej: Compré verduras y harina por 12500 pesos ayer...';
+        }
+
+        // Integración con Gemini AI API para extracción estructurada
+        async function processAIInput() {
+            const inputText = document.getElementById('aiInputText').value.trim();
+            if (!inputText) return;
+
+            const statusEl = document.getElementById('aiStatus');
+            const processBtn = document.getElementById('aiProcessBtn');
+
+            statusEl.classList.remove('hidden');
+            processBtn.disabled = true;
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            const systemPrompt = `Eres un asistente contable para un negocio de cocina artesanal.
+Extrae la información relevante del texto proporcionado por el usuario y clasifícala estrictamente según el esquema JSON especificado.
+La fecha de hoy es: ${todayStr}. Si el usuario menciona "ayer", resta un día. Si no indica fecha, usa la fecha de hoy.
+Tipos posibles: "ingreso" o "gasto".
+Categorías de Ingreso: ${CATEGORIES.ingreso.join(', ')}.
+Categorías de Gasto: ${CATEGORIES.gasto.join(', ')}.
+El monto debe ser un número entero o decimal.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: inputText }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            type: { type: "STRING", enum: ["ingreso", "gasto"] },
+                            date: { type: "STRING", description: "Fecha en formato YYYY-MM-DD" },
+                            category: { type: "STRING", description: "Categoría más apropiada" },
+                            description: { type: "STRING", description: "Detalle o concepto resumido del movimiento" },
+                            amount: { type: "NUMBER", description: "Monto total sin símbolos" }
+                        },
+                        propertyOrdering: ["type", "date", "category", "description", "amount"]
+                    }
+                }
+            };
+
+            try {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (jsonText) {
+                    const parsed = JSON.parse(jsonText);
+
+                    const newMov = {
+                        id: Date.now().toString(),
+                        type: parsed.type || 'ingreso',
+                        date: parsed.date || todayStr,
+                        category: parsed.category || (parsed.type === 'gasto' ? 'Materia Prima / Alimentos' : 'Platos / Comidas'),
+                        description: parsed.description || inputText,
+                        amount: parseFloat(parsed.amount) || 0
+                    };
+
+                    if (newMov.amount > 0) {
+                        movements.push(newMov);
+                        saveData();
+                        populateMonthFilters();
+                        renderMovements();
+                        renderSummary();
+
+                        document.getElementById('aiInputText').value = '';
+                    } else {
+                        alert('No pudimos detectar un monto válido en tu frase. Por favor intenta especificar el monto (ej: $15000).');
+                    }
+                }
+            } catch (err) {
+                console.error('Error procesando IA:', err);
+                alert('Hubo un inconveniente al procesar la solicitud. Verifica el formato e intenta nuevamente.');
+            } finally {
+                statusEl.classList.add('hidden');
+                processBtn.disabled = false;
+            }
+        }
+
+        // Cambiar pestañas
+        function switchTab(tabName) {
+            document.getElementById('sec-movements').classList.add('hidden');
+            document.getElementById('sec-summary').classList.add('hidden');
+            document.getElementById('sec-analytics').classList.add('hidden');
+
+            document.getElementById('tab-movements').classList.remove('tab-active');
+            document.getElementById('tab-summary').classList.remove('tab-active');
+            document.getElementById('tab-analytics').classList.remove('tab-active');
+
+            document.getElementById(`sec-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).classList.add('tab-active');
+
+            if (tabName === 'summary') renderSummary();
+            if (tabName === 'analytics') renderAnalytics();
+        }
+
+        // Actualizar dropdown de categorías
+        function updateCategories() {
+            const type = document.getElementById('type').value;
+            const catSelect = document.getElementById('category');
+            catSelect.innerHTML = '';
+
+            CATEGORIES[type].forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                catSelect.appendChild(opt);
+            });
+        }
+
+        // Guardar nuevo registro
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const newMov = {
+                id: Date.now().toString(),
+                type: document.getElementById('type').value,
+                date: document.getElementById('date').value,
+                category: document.getElementById('category').value,
+                description: document.getElementById('description').value.trim(),
+                amount: parseFloat(document.getElementById('amount').value)
+            };
+
+            movements.push(newMov);
+            saveData();
+
+            // Limpiar formulario excepto la fecha
+            document.getElementById('description').value = '';
+            document.getElementById('amount').value = '';
+
+            populateMonthFilters();
+            renderMovements();
+        }
+
+        // Eliminar registro
+        function deleteMovement(id) {
+            if (confirm('¿Estás seguro de que deseas eliminar este movimiento?')) {
+                movements = movements.filter(m => m.id !== id);
+                saveData();
+                populateMonthFilters();
+                renderMovements();
+            }
+        }
+
+        // Guardar en localStorage
+        function saveData() {
+            localStorage.setItem('cocina_movements', JSON.stringify(movements));
+        }
+
+        // Cargar lista de meses disponibles en filtros
+        function populateMonthFilters() {
+            const months = new Set();
+            const now = new Date();
+            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            months.add(currentYearMonth);
+
+            movements.forEach(m => {
+                if (m.date) {
+                    months.add(m.date.substring(0, 7));
+                }
+            });
+
+            const sortedMonths = Array.from(months).sort().reverse();
+
+            const filterMonth = document.getElementById('filterMonth');
+            const summaryMonthSelect = document.getElementById('summaryMonthSelect');
+
+            const prevFilterVal = filterMonth.value;
+            const prevSumVal = summaryMonthSelect.value;
+
+            filterMonth.innerHTML = '<option value="todos">Todos los meses</option>';
+            summaryMonthSelect.innerHTML = '';
+
+            sortedMonths.forEach(ym => {
+                const [year, month] = ym.split('-');
+                const dateObj = new Date(year, month - 1);
+                const monthName = dateObj.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                const formattedName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+                // Option para filtro
+                const opt1 = document.createElement('option');
+                opt1.value = ym;
+                opt1.textContent = formattedName;
+                filterMonth.appendChild(opt1);
+
+                // Option para resumen
+                const opt2 = document.createElement('option');
+                opt2.value = ym;
+                opt2.textContent = formattedName;
+                summaryMonthSelect.appendChild(opt2);
+            });
+
+            if (prevFilterVal) filterMonth.value = prevFilterVal;
+            if (prevSumVal) summaryMonthSelect.value = prevSumVal;
+        }
+
+        // Renderizar Tabla de Movimientos
+        function renderMovements() {
+            const monthFilter = document.getElementById('filterMonth').value;
+            const typeFilter = document.getElementById('filterType').value;
+            const tbody = document.getElementById('movementsTableBody');
+            const noData = document.getElementById('noDataMessage');
+
+            tbody.innerHTML = '';
+
+            // Filtrar
+            let filtered = movements.filter(m => {
+                const matchMonth = (monthFilter === 'todos') || (m.date.startsWith(monthFilter));
+                const matchType = (typeFilter === 'todos') || (m.type === typeFilter);
+                return matchMonth && matchType;
+            });
+
+            // Ordenar por fecha descendente
+            filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (filtered.length === 0) {
+                noData.classList.remove('hidden');
+                return;
+            } else {
+                noData.classList.add('hidden');
+            }
+
+            filtered.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50/80 transition text-xs sm:text-sm";
+
+                const isIngreso = m.type === 'ingreso';
+                const badgeColor = isIngreso ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800';
+                const amountColor = isIngreso ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
+                const prefix = isIngreso ? '+' : '-';
+
+                // Formatear fecha
+                const [y, mon, d] = m.date.split('-');
+                const dateFormatted = `${d}/${mon}/${y}`;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-slate-600 whitespace-nowrap">${dateFormatted}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${badgeColor}">
+                            ${isIngreso ? 'Ingreso' : 'Gasto'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-500">${m.category}</td>
+                    <td class="py-3 px-4 font-medium text-slate-800">${m.description}</td>
+                    <td class="py-3 px-4 text-right ${amountColor}">${prefix} $${formatMoney(m.amount)}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteMovement('${m.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition" title="Eliminar">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Renderizar Tab Resumen
+        function renderSummary() {
+            const selectedMonth = document.getElementById('summaryMonthSelect').value;
+            if (!selectedMonth) return;
+
+            const monthMovements = movements.filter(m => m.date.startsWith(selectedMonth));
+
+            let totalIngresos = 0;
+            let totalGastos = 0;
+
+            const catIngresos = {};
+            const catGastos = {};
+
+            monthMovements.forEach(m => {
+                if (m.type === 'ingreso') {
+                    totalIngresos += m.amount;
+                    catIngresos[m.category] = (catIngresos[m.category] || 0) + m.amount;
+                } else {
+                    totalGastos += m.amount;
+                    catGastos[m.category] = (catGastos[m.category] || 0) + m.amount;
+                }
+            });
+
+            const neto = totalIngresos - totalGastos;
+            const margen = totalIngresos > 0 ? ((neto / totalIngresos) * 100).toFixed(1) : 0;
+
+            // Calcular porcentajes sobre Neto (Si el neto es negativo o 0, el reparto es 0)
+            const baseReparto = Math.max(0, neto);
+            const decanaAmount = baseReparto * (config.decanaPct / 100);
+            const profitAmount = baseReparto * (config.profitPct / 100);
+
+            // UI
+            document.getElementById('sumIngresos').textContent = `$${formatMoney(totalIngresos)}`;
+            document.getElementById('sumGastos').textContent = `$${formatMoney(totalGastos)}`;
+            document.getElementById('sumNeto').textContent = `$${formatMoney(neto)}`;
+            document.getElementById('sumMargen').textContent = `${margen}%`;
+
+            document.getElementById('cardDecanaPct').textContent = `${config.decanaPct}%`;
+            document.getElementById('cardProfitPct').textContent = `${config.profitPct}%`;
+
+            document.getElementById('amountDecana').textContent = `$${formatMoney(decanaAmount)}`;
+            document.getElementById('amountDecanaFinal').textContent = `$${formatMoney(decanaAmount)}`;
+
+            document.getElementById('amountProfit').textContent = `$${formatMoney(profitAmount)}`;
+            document.getElementById('amountProfitFinal').textContent = `$${formatMoney(profitAmount)}`;
+
+            // Desglose Categorías
+            renderCategoryBreakdown('incomeCategoryList', catIngresos, totalIngresos, 'emerald');
+            renderCategoryBreakdown('expenseCategoryList', catGastos, totalGastos, 'rose');
+        }
+
+        function renderCategoryBreakdown(elementId, catMap, total, color) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+
+            const keys = Object.keys(catMap);
+            if (keys.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 py-2">Sin registros en este período.</p>';
+                return;
+            }
+
+            keys.forEach(cat => {
+                const amount = catMap[cat];
+                const pct = total > 0 ? ((amount / total) * 100).toFixed(1) : 0;
+
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-100";
+                div.innerHTML = `
+                    <span class="text-slate-600 font-medium text-xs">${cat}</span>
+                    <div class="text-right">
+                        <span class="font-bold text-xs text-slate-800">$${formatMoney(amount)}</span>
+                        <span class="text-[10px] text-slate-400 block">(${pct}%)</span>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // Renderizar Estadísticas / Chart.js
+        function renderAnalytics() {
+            // Agrupar por mes los últimos meses
+            const monthMap = {};
+
+            movements.forEach(m => {
+                const ym = m.date.substring(0, 7);
+                if (!monthMap[ym]) {
+                    monthMap[ym] = { ingreso: 0, gasto: 0 };
+                }
+                if (m.type === 'ingreso') monthMap[ym].ingreso += m.amount;
+                else monthMap[ym].gasto += m.amount;
+            });
+
+            const labels = Object.keys(monthMap).sort();
+            const ingresosData = labels.map(ym => monthMap[ym].ingreso);
+            const gastosData = labels.map(ym => monthMap[ym].gasto);
+
+            // Gráfico Histórico
+            const ctx1 = document.getElementById('historyChart').getContext('2d');
+            if (historyChartInstance) historyChartInstance.destroy();
+
+            historyChartInstance = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: labels.map(formatYearMonthLabel),
+                    datasets: [
+                        { label: 'Ingresos', data: ingresosData, backgroundColor: '#10b981' },
+                        { label: 'Gastos', data: gastosData, backgroundColor: '#f43f5e' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            // Gráfico Torta
+            const selectedMonth = document.getElementById('summaryMonthSelect').value || labels[labels.length - 1];
+            const currentData = monthMap[selectedMonth] || { ingreso: 0, gasto: 0 };
+
+            const ctx2 = document.getElementById('pieChart').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+
+            pieChartInstance = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Gastos Producción', 'Decana', 'Mi Ganancia'],
+                    datasets: [{
+                        data: [
+                            currentData.gasto,
+                            Math.max(0, currentData.ingreso - currentData.gasto) * (config.decanaPct / 100),
+                            Math.max(0, currentData.ingreso - currentData.gasto) * (config.profitPct / 100)
+                        ],
+                        backgroundColor: ['#f43f5e', '#2e7d32', '#f59e0b']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // Modal de Configuración
+        function openConfigModal() {
+            document.getElementById('decanaRange').value = config.decanaPct;
+            updateRangeLabels(config.decanaPct);
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+
+        function updateRangeLabels(val) {
+            const decana = parseInt(val);
+            const profit = 100 - decana;
+            document.getElementById('modalDecanaVal').textContent = `${decana}%`;
+            document.getElementById('modalProfitVal').textContent = `${profit}%`;
+        }
+
+        function saveConfig() {
+            const decana = parseInt(document.getElementById('decanaRange').value);
+            config.decanaPct = decana;
+            config.profitPct = 100 - decana;
+
+            localStorage.setItem('cocina_config', JSON.stringify(config));
+            updateHeaderConfigUI();
+            closeConfigModal();
+            renderSummary();
+        }
+
+        function updateHeaderConfigUI() {
+            document.getElementById('headerDecanaPct').textContent = `${config.decanaPct}%`;
+            document.getElementById('headerProfitPct').textContent = `${config.profitPct}%`;
+        }
+
+        // Helpers
+        function formatMoney(amount) {
+            return amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatYearMonthLabel(ym) {
+            const [year, month] = ym.split('-');
+            const date = new Date(year, month - 1);
+            return date.toLocaleString('es-ES', { month: 'short', year: '2-digit' });
+        }
+
+        // Exportar CSV
+        function exportToCSV() {
+            if (movements.length === 0) {
+                alert('No hay registros para exportar.');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,ID,Fecha,Tipo,Categoria,Concepto,Monto\n";
+            movements.forEach(m => {
+                const row = `"${m.id}","${m.date}","${m.type}","${m.category}","${m.description.replace(/"/g, '""')}","${m.amount}"`;
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `movimientos_cocina_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Cargar datos de ejemplo basados en la cocina semanal y budines
+        function loadDemoData() {
+            const demoMovements = [
+                { id: '1', type: 'ingreso', date: '2026-10-05', category: 'Budines / Dulces', description: '6 porciones de budín 1', amount: 30000 },
+                { id: '2', type: 'ingreso', date: '2026-10-06', category: 'Budines / Dulces', description: '3 porciones de budín 2', amount: 15000 },
+                { id: '3', type: 'gasto', date: '2026-10-04', category: 'Materia Prima / Alimentos', description: 'Harina, huevos, azúcar, manteca y naranjas', amount: 12500 },
+                { id: '4', type: 'gasto', date: '2026-10-04', category: 'Empaques / Envases', description: 'Moldes descartables y film', amount: 3200 },
+                { id: '5', type: 'ingreso', date: '2026-10-12', category: 'Platos / Comidas', description: '5 viandas milhojas de verdura', amount: 25000 },
+                { id: '6', type: 'gasto', date: '2026-10-11', category: 'Materia Prima / Alimentos', description: 'Verduras, quesos y tapas', amount: 9800 }
+            ];
+
+            movements = demoMovements;
+            saveData();
+            populateMonthFilters();
+            renderMovements();
+            renderSummary();
+            alert('Se cargaron datos de ejemplo para explorar la aplicación.');
+        }
+    </script>
+</body>
+</html>
