@@ -90,21 +90,25 @@
                         <p class="text-xs text-purple-200/80">Dicta o escribe tus gastos/ventas en lenguaje natural (ej: "Hoy vendí 6 budines por 30000 pesos")</p>
                     </div>
                 </div>
+                <!-- Botón de ajustes de API key opcional si se desea usar clave personalizada -->
+                <button onclick="promptApiKey()" class="text-xs text-purple-300 hover:text-white underline flex items-center gap-1">
+                    <i class="fa-solid fa-key"></i> Clave API IA
+                </button>
             </div>
 
             <div class="mt-4 flex flex-col sm:flex-row items-center gap-2">
                 <div class="relative w-full flex-grow">
-                    <input type="text" id="aiInputText" placeholder="Ej: Compré verduras y harina por 12500 pesos ayer..." class="w-full bg-slate-900/80 text-white text-sm placeholder-slate-400 border border-purple-400/30 rounded-xl pl-4 pr-10 py-3 outline-none focus:ring-2 focus:ring-purple-400 transition">
-                    <button id="micBtn" onclick="toggleVoiceRecording()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-purple-300 transition" title="Dictar por Voz">
-                        <i id="micIcon" class="fa-solid fa-microphone text-base"></i>
+                    <input type="text" id="aiInputText" placeholder="Ej: Compré verduras y harina por 12500 pesos ayer..." class="w-full bg-slate-900/80 text-white text-sm placeholder-slate-400 border border-purple-400/30 rounded-xl pl-4 pr-12 py-3 outline-none focus:ring-2 focus:ring-purple-400 transition">
+                    <button id="micBtn" type="button" onclick="toggleVoiceRecording()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-300 hover:text-purple-300 transition" title="Dictar por Voz">
+                        <i id="micIcon" class="fa-solid fa-microphone text-lg"></i>
                     </button>
                 </div>
-                <button onclick="processAIInput()" id="aiProcessBtn" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white px-5 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition shadow-md whitespace-nowrap">
+                <button type="button" onclick="processAIInput()" id="aiProcessBtn" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-500 text-white px-5 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition shadow-md whitespace-nowrap">
                     <i class="fa-solid fa-bolt"></i> Procesar
                 </button>
             </div>
             <div id="aiStatus" class="mt-2 text-xs text-purple-300 hidden flex items-center gap-2">
-                <i class="fa-solid fa-spinner fa-spin"></i> Analizando mensaje con IA...
+                <i class="fa-solid fa-spinner fa-spin"></i> Analizando mensaje...
             </div>
         </div>
 
@@ -429,6 +433,7 @@
         // Estado Global
         let movements = JSON.parse(localStorage.getItem('cocina_movements')) || [];
         let config = JSON.parse(localStorage.getItem('cocina_config')) || { decanaPct: 50, profitPct: 50 };
+        let userApiKey = localStorage.getItem('cocina_gemini_key') || "";
         let recognition = null;
         let isRecording = false;
 
@@ -449,7 +454,16 @@
             renderSummary();
         };
 
-        // Configurar Reconocimiento de Voz Web Speech API
+        function promptApiKey() {
+            const key = prompt("Si deseas usar tu propia clave de Gemini API (gratuita de Google AI Studio), ingrésala aquí (deja en blanco para usar el modo estándar):", userApiKey);
+            if (key !== null) {
+                userApiKey = key.trim();
+                localStorage.setItem('cocina_gemini_key', userApiKey);
+                alert("Clave de API guardada.");
+            }
+        }
+
+        // Configurar Reconocimiento de Voz Web Speech API (Soporte extendido Chrome + Mobile)
         function setupSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
@@ -460,20 +474,25 @@
 
                 recognition.onstart = function() {
                     isRecording = true;
-                    document.getElementById('micIcon').className = 'fa-solid fa-microphone-slash text-rose-400 animate-pulse';
-                    document.getElementById('aiInputText').placeholder = 'Escuchando tu dictado... habla ahora...';
+                    document.getElementById('micIcon').className = 'fa-solid fa-circle-stop text-rose-400 animate-pulse text-lg';
+                    document.getElementById('aiInputText').placeholder = 'Escuchando en Chrome... habla ahora...';
                 };
 
                 recognition.onresult = function(event) {
-                    const transcript = event.results[0][0].transcript;
-                    document.getElementById('aiInputText').value = transcript;
-                    stopRecording();
-                    processAIInput(); // Procesar automáticamente al terminar de hablar
+                    if (event.results && event.results.length > 0) {
+                        const transcript = event.results[0][0].transcript;
+                        document.getElementById('aiInputText').value = transcript;
+                        stopRecording();
+                        processAIInput(); // Procesar automáticamente al terminar de hablar
+                    }
                 };
 
                 recognition.onerror = function(event) {
                     stopRecording();
-                    alert('No se pudo procesar el audio o el micrófono no tiene permiso.');
+                    console.warn('Error de reconocimiento de voz:', event.error);
+                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                        alert('Permiso de micrófono bloqueado por Chrome.\n\nPara activarlo:\n1. Toca el icono de candado o la "i" a la izquierda de la dirección web en Chrome.\n2. Selecciona "Permisos del sitio" / "Configuración de sitios web".\n3. Habilita el Micrófono.');
+                    }
                 };
 
                 recognition.onend = function() {
@@ -484,23 +503,32 @@
 
         function toggleVoiceRecording() {
             if (!recognition) {
-                alert('Tu navegador o dispositivo no soporta dictado por voz directo. Puedes escribir el texto en el campo.');
+                setupSpeechRecognition();
+            }
+            if (!recognition) {
+                alert('Si tu versión de Chrome en el celular bloquea el dictado directo, puedes tocar la caja de texto y presionar el ícono de micrófono que aparece abajo en el teclado de tu teléfono.');
                 return;
             }
             if (isRecording) {
                 recognition.stop();
             } else {
-                recognition.start();
+                try {
+                    recognition.start();
+                } catch(e) {
+                    console.log('Reiniciando reconocimiento...', e);
+                    recognition.stop();
+                    setTimeout(() => { recognition.start(); }, 200);
+                }
             }
         }
 
         function stopRecording() {
             isRecording = false;
-            document.getElementById('micIcon').className = 'fa-solid fa-microphone text-base';
+            document.getElementById('micIcon').className = 'fa-solid fa-microphone text-lg';
             document.getElementById('aiInputText').placeholder = 'Ej: Compré verduras y harina por 12500 pesos ayer...';
         }
 
-        // Integración con Gemini AI API para extracción estructurada
+        // Integración con Gemini AI API + Procesador Inteligente de Respaldo Local
         async function processAIInput() {
             const inputText = document.getElementById('aiInputText').value.trim();
             if (!inputText) return;
@@ -513,35 +541,37 @@
 
             const todayStr = new Date().toISOString().split('T')[0];
 
-            const systemPrompt = `Eres un asistente contable para un negocio de cocina artesanal.
-Extrae la información relevante del texto proporcionado por el usuario y clasifícala estrictamente según el esquema JSON especificado.
-La fecha de hoy es: ${todayStr}. Si el usuario menciona "ayer", resta un día. Si no indica fecha, usa la fecha de hoy.
+            let success = false;
+
+            // Intento 1: Llamada a API Gemini
+            try {
+                const systemPrompt = `Eres un asistente contable para un negocio de cocina artesanal.
+Extrae la información del texto y clasifícala estrictamente según el esquema JSON.
+Fecha de hoy: ${todayStr}. Si el usuario menciona "ayer", resta 1 día. Si menciona fecha específica, úsala.
 Tipos posibles: "ingreso" o "gasto".
 Categorías de Ingreso: ${CATEGORIES.ingreso.join(', ')}.
-Categorías de Gasto: ${CATEGORIES.gasto.join(', ')}.
-El monto debe ser un número entero o decimal.`;
+Categorías de Gasto: ${CATEGORIES.gasto.join(', ')}.`;
 
-            const payload = {
-                contents: [{ parts: [{ text: inputText }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            type: { type: "STRING", enum: ["ingreso", "gasto"] },
-                            date: { type: "STRING", description: "Fecha en formato YYYY-MM-DD" },
-                            category: { type: "STRING", description: "Categoría más apropiada" },
-                            description: { type: "STRING", description: "Detalle o concepto resumido del movimiento" },
-                            amount: { type: "NUMBER", description: "Monto total sin símbolos" }
-                        },
-                        propertyOrdering: ["type", "date", "category", "description", "amount"]
+                const payload = {
+                    contents: [{ parts: [{ text: inputText }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                type: { type: "STRING", enum: ["ingreso", "gasto"] },
+                                date: { type: "STRING" },
+                                category: { type: "STRING" },
+                                description: { type: "STRING" },
+                                amount: { type: "NUMBER" }
+                            },
+                            propertyOrdering: ["type", "date", "category", "description", "amount"]
+                        }
                     }
-                }
-            };
+                };
 
-            try {
-                const apiKey = "";
+                const apiKey = userApiKey || "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {
@@ -550,40 +580,90 @@ El monto debe ser un número entero o decimal.`;
                     body: JSON.stringify(payload)
                 });
 
-                const result = await response.json();
-                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (jsonText) {
-                    const parsed = JSON.parse(jsonText);
-
-                    const newMov = {
-                        id: Date.now().toString(),
-                        type: parsed.type || 'ingreso',
-                        date: parsed.date || todayStr,
-                        category: parsed.category || (parsed.type === 'gasto' ? 'Materia Prima / Alimentos' : 'Platos / Comidas'),
-                        description: parsed.description || inputText,
-                        amount: parseFloat(parsed.amount) || 0
-                    };
-
-                    if (newMov.amount > 0) {
-                        movements.push(newMov);
-                        saveData();
-                        populateMonthFilters();
-                        renderMovements();
-                        renderSummary();
-
-                        document.getElementById('aiInputText').value = '';
-                    } else {
-                        alert('No pudimos detectar un monto válido en tu frase. Por favor intenta especificar el monto (ej: $15000).');
+                if (response.ok) {
+                    const result = await response.json();
+                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (jsonText) {
+                        const parsed = JSON.parse(jsonText);
+                        addMovementFromAI(parsed, inputText, todayStr);
+                        success = true;
                     }
                 }
             } catch (err) {
-                console.error('Error procesando IA:', err);
-                alert('Hubo un inconveniente al procesar la solicitud. Verifica el formato e intenta nuevamente.');
-            } finally {
-                statusEl.classList.add('hidden');
-                processBtn.disabled = false;
+                console.warn('Fallback a procesador local por error de API:', err);
             }
+
+            // Intento 2: Procesamiento Inteligente Local de Respaldo (Si falla la API o no hay red)
+            if (!success) {
+                parseInputLocally(inputText, todayStr);
+            }
+
+            statusEl.classList.add('hidden');
+            processBtn.disabled = false;
+        }
+
+        // Agrega el movimiento detectado a los registros
+        function addMovementFromAI(parsed, originalText, todayStr) {
+            const newMov = {
+                id: Date.now().toString(),
+                type: parsed.type || 'ingreso',
+                date: parsed.date || todayStr,
+                category: parsed.category || (parsed.type === 'gasto' ? 'Materia Prima / Alimentos' : 'Platos / Comidas'),
+                description: parsed.description || originalText,
+                amount: parseFloat(parsed.amount) || 0
+            };
+
+            if (newMov.amount > 0) {
+                movements.push(newMov);
+                saveData();
+                populateMonthFilters();
+                renderMovements();
+                renderSummary();
+                document.getElementById('aiInputText').value = '';
+            } else {
+                alert('No logramos detectar un monto numérico en tu texto. Por favor incluye el monto en pesos (Ej: "compré verduras $15000").');
+            }
+        }
+
+        // Analizador sintáctico local que no requiere internet ni claves
+        function parseInputLocally(text, todayStr) {
+            const lower = text.toLowerCase();
+            
+            // Detectar tipo
+            const isGasto = lower.includes('compré') || lower.includes('compre') || lower.includes('gasto') || lower.includes('pagué') || lower.includes('pague') || lower.includes('compras') || lower.includes('costo');
+            const type = isGasto ? 'gasto' : 'ingreso';
+
+            // Detectar monto (busca números grandes o frases como "$30000" o "30.000" o "30000 pesos")
+            const numberMatch = text.match(/\$?\s*(\d+[\d\.,]*)/);
+            let amount = 0;
+            if (numberMatch) {
+                const cleanedStr = numberMatch[1].replace(/\./g, '').replace(',', '.');
+                amount = parseFloat(cleanedStr);
+            }
+
+            // Detectar fecha
+            let date = todayStr;
+            if (lower.includes('ayer')) {
+                const d = new Date();
+                d.setDate(d.getDate() - 1);
+                date = d.toISOString().split('T')[0];
+            }
+
+            // Categoría sugerida
+            let category = type === 'gasto' ? 'Materia Prima / Alimentos' : 'Platos / Comidas';
+            if (type === 'gasto' && (lower.includes('envase') || lower.includes('molde') || lower.includes('bolsa') || lower.includes('film'))) {
+                category = 'Empaques / Envases';
+            } else if (type === 'ingreso' && lower.includes('budin')) {
+                category = 'Budines / Dulces';
+            }
+
+            addMovementFromAI({
+                type: type,
+                date: date,
+                category: category,
+                description: text,
+                amount: amount
+            }, text, todayStr);
         }
 
         // Cambiar pestañas
